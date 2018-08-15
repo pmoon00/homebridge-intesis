@@ -39,7 +39,7 @@ function Intesis(log, config) {
 	this.config = config;
 	this.parseJSON = function (stringPayload) {
 		try {
-			return JSON.parse(body);
+			return JSON.parse(stringPayload);
 		} catch (error) { }
 
 		return false;
