@@ -238,6 +238,7 @@ function IntesisDevice(log, details, platform) {
 	this.log = log;
 	this.details = details;
 	this.platform = platform;
+	this.displayName = details.name;
 	this.heaterCoolerService = new Service.HeaterCooler(details.name);
 	this.accessoryInfoService = new Service.AccessoryInformation();
 	this.accessoryInfoService
