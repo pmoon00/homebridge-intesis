@@ -81,7 +81,7 @@ Intesis.prototype = {
 			return;
 		}
 
-		if (body && body.length > 0 && body && body.access_token) {
+		if (body && body.access_token) {
 			this.log("Successfully obtained token.");
 			this.token = body.access_token;
 			this.getConfig(this.token, this.instantiateAccessories);
