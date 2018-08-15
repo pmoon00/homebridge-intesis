@@ -75,7 +75,7 @@ Intesis.prototype = {
 		}, callback);
 	},
 	startWithTokenResult: function (err, httpResponse, body) {
-		if (err || httpReponse.statusCode != 200) {
+		if (err || httpResponse.statusCode != 200) {
 			this.log("An error occurred obtaining token, homebridge-intesis plugin failed to load.");
 			this.log(err);
 			return;
@@ -98,7 +98,7 @@ Intesis.prototype = {
 				"Authorization": "Bearer " + token
 			}
 		}, function (err, httpResponse, body) {
-			if (err || httpReponse.statusCode != 200) {
+			if (err || httpResponse.statusCode != 200) {
 				this.log("An error occurred obtaining config, homebridge-intesis plugin might have failed to load.");
 				this.log(err);
 				return;
