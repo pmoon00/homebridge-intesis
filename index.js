@@ -81,6 +81,12 @@ Intesis.prototype = {
 			return;
 		}
 
+		if (body) {
+			try {
+				body = JSON.parse(body);
+			} catch { }
+		}
+
 		if (body && body.access_token) {
 			this.log("Successfully obtained token.");
 			this.token = body.access_token;
