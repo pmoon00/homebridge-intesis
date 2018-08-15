@@ -244,7 +244,7 @@ function IntesisDevice(log, details, platform) {
 		.setCharacteristic(Characteristic.Manufacturer, "Intesis")
 		.setCharacteristic(Characteristic.Model, details.name)
 		.setCharacteristic(Characteristic.SerialNumber, details.device_id);
-	this.services = [heaterCoolerService, accessoryInfoService];
+	this.services = [this.heaterCoolerService, this.accessoryInfoService];
 	this.setup(this.details);
 }
 
