@@ -62,7 +62,7 @@ Intesis.prototype = {
 		this.deviceDictionary = {};
 		this.setupAccessories = function (accessories) {
 			this.log("Setting up accessories/devices...");
-			this.log(JSON.stringify(accessories));
+			this.log(accessories);
 			callback(accessories);
 		};
 		this.getToken({
