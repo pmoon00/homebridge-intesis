@@ -37,6 +37,13 @@ module.exports = function (homebridge) {
 function Intesis(log, config) {
 	this.log = log;
 	this.config = config;
+	this.parseJSON = function (stringPayload) {
+		try {
+			return JSON.parse(body);
+		} catch (error) { }
+
+		return false;
+	};
 }
 
 Intesis.prototype = {
@@ -81,11 +88,7 @@ Intesis.prototype = {
 			return;
 		}
 
-		if (body) {
-			try {
-				body = JSON.parse(body);
-			} catch (error) { }
-		}
+		body = this.parseJSON(body);
 
 		if (body && body.access_token) {
 			this.log("Successfully obtained token.");
@@ -109,6 +112,8 @@ Intesis.prototype = {
 				this.log(err);
 				return;
 			}
+
+			body = this.parseJSON(body);
 
 			if (body && body.length > 0 && body[0]) {
 				this.log("Successfully obtained config.");
@@ -168,12 +173,14 @@ Intesis.prototype = {
 				"value": value
 			}]
 		}, function (err, httpResponse, body) {
-			if (err || httpReponse.statusCode != 200) {
+			if (err || httpResponse.statusCode != 200) {
 				this.log(`An error occurred setting value [${value}] for the device [${deviceID}] and service [${serviceID}].`);
 				this.log(err);
 				callback(err);
 				return;
 			}
+
+			body = this.parseJSON(body);
 
 			if (body && body.length > 0 && body[0] && body[0].length == 3) {
 				callback(null, body[0][2]);
