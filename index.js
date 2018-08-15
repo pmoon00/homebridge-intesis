@@ -84,7 +84,7 @@ Intesis.prototype = {
 		if (body) {
 			try {
 				body = JSON.parse(body);
-			} catch { }
+			} catch (error) { }
 		}
 
 		if (body && body.access_token) {
