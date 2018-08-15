@@ -68,34 +68,37 @@ Intesis.prototype = {
 	},
 	getToken: function (payload, callback) {
 		this.log("Obtaining token...");
-		callback = callback || function () {};
+		callback = (callback || function () {}).bind(this);
 		request.post({
 			"url": this.apiBaseURL + "api.php/oauth2/token",
 			"form": payload
 		}, callback);
 	},
 	startWithTokenResult: function (err, httpResponse, body) {
-		if (err) {
+		if (err || httpReponse.statusCode != 200) {
 			this.log("An error occurred obtaining token, homebridge-intesis plugin failed to load.");
 			this.log(err);
 			return;
 		}
 
-		if (body && body.length > 0 && body[0] && body[0].access_token) {
+		if (body && body.length > 0 && body && body.access_token) {
 			this.log("Successfully obtained token.");
-			this.token = body[0].access_token;
-			this.start(this.token, this.instantiateAccessories);
+			this.token = body.access_token;
+			this.getConfig(this.token, this.instantiateAccessories);
 		} else {
 			this.log("The response from Intesis while obtaining the token was malformed.  homebridge-intesis plugin failed to load.");
 		}
 	},
 	getConfig: function (token, callback) {
-		callback = callback || function () {};
+		callback = (callback || function () {}).bind(this);
 		request({
 			"uri": this.apiBaseURL + "api.php/v1/config",
-			"method": "GET"
+			"method": "GET",
+			"headers": {
+				"Authorization": "Bearer " + token
+			}
 		}, function (err, httpResponse, body) {
-			if (err) {
+			if (err || httpReponse.statusCode != 200) {
 				this.log("An error occurred obtaining config, homebridge-intesis plugin might have failed to load.");
 				this.log(err);
 				return;
@@ -108,11 +111,11 @@ Intesis.prototype = {
 			} else {
 				this.log("The response from Intesis while obtaining the config was malformed.");
 			}
-		});
+		}.bind(this));
 	},
 	instantiateAccessories: function (rawConfig) {
 		if (!rawConfig || !rawConfig.devices || rawConfig.devices.length == 0) {
-			this.log("Could not instantiate accessories due to malformed config response.");
+			this.log("Could not instantiate accessories due to malformed config, or no devices in response.");
 			return;
 		}
 
@@ -128,92 +131,237 @@ Intesis.prototype = {
 				continue;
 			}
 
-			this.deviceDictionary[name] = new IntesisDevice(this.log, device);
+			this.deviceDictionary[name] = new IntesisDevice(this.log, device, this);
 			this.accessories.push(this.deviceDictionary[name]);
 			this.log(`Added device with name ${name}.`);
 		}
 
 		this.setupAccessories(this.accessories);
+	},
+	setValue: function (deviceID, serviceID, value, callback) {
+		if (!deviceID) {
+			callback("No deviceID supplied.");
+			return;
+		}
+
+		if (!serviceID) {
+			callback("No serviceID supplied.");
+			return;
+		}
+
+		callback = callback || function () {};
+		request({
+			"uri": this.apiBaseURL + "api.php/v2/set",
+			"method": "POST",
+			"headers": {
+				"Authorization": "Bearer " + this.token
+			},
+			"json": [{
+				"device_id": deviceID,
+				"service_id": serviceID,
+				"value": value
+			}]
+		}, function (err, httpResponse, body) {
+			if (err || httpReponse.statusCode != 200) {
+				this.log(`An error occurred setting value [${value}] for the device [${deviceID}] and service [${serviceID}].`);
+				this.log(err);
+				callback(err);
+				return;
+			}
+
+			if (body && body.length > 0 && body[0] && body[0].length == 3) {
+				callback(null, body[0][2]);
+			} else {
+				err = `Set value [${value}] for the device [${deviceID}] and service [${serviceID}], but bad response so probably didn't set the value.`;
+				this.log(err);
+				callback(err);
+			}
+		}.bind(this));
 	}
 }
 
 /*
  * Accessory code
  * */
-function IntesisDevice(log, details) {
+function IntesisDevice(log, details, platform) {
+	this.dataMap = {
+		"fanSpeed": {
+			"intesis": ["" , "position-one", "position-two", "position-three", "position-four"],
+			"homekit": {
+				"position-one": 1,
+				"position-two": 2,
+				"position-three": 3,
+				"position-four": 4
+			}
+		},
+		"userMode": {
+			"intesis": function (homekitValue) {
+				var intesisMode = "auto";
+
+				switch (homekitValue) {
+					case Characteristic.TargetHeaterCoolerState.HEAT:
+						intesisMode = "heat";
+						break;
+					case Characteristic.TargetHeaterCoolerState.COOL:
+						intesisMode = "cool";
+						break;
+					case Characteristic.TargetHeaterCoolerState.AUTO:
+					default:
+						intesisMode = "auto";
+						break;
+				}
+
+				return intesisMode;
+			},
+			"homekit": {
+				"heat": Characteristic.TargetHeaterCoolerState.HEAT,
+				"cool": Characteristic.TargetHeaterCoolerState.COOL,
+				"auto": Characteristic.TargetHeaterCoolerState.AUTO,
+				"dry": Characteristic.TargetHeaterCoolerState.AUTO,
+				"fan": Characteristic.TargetHeaterCoolerState.AUTO
+			}
+		}
+	};
 	this.log = log;
 	this.details = details;
+	this.platform = platform;
+	this.heaterCoolerService = new Service.HeaterCooler(details.name);
+	this.accessoryInfoService = new Service.AccessoryInformation();
+	this.accessoryInfoService
+		.setCharacteristic(Characteristic.Manufacturer, "Intesis")
+		.setCharacteristic(Characteristic.Model, details.name)
+		.setCharacteristic(Characteristic.SerialNumber, details.device_id);
+	this.services = [heaterCoolerService, accessoryInfoService];
+	this.setup(this.details);
 }
 
 IntesisDevice.prototype = {
-	getState: function (callback) {
-		this.log(`getState called and motionDetected: ${this.motionDetected}.`);
-		callback(null, this.motionDetected);
+	setup: function (details) {
+		var services = details.services;
+		var deviceID = details.device_id;
+
+		for (var serviceName in services) {
+			var service = services[serviceName];
+
+			if (Array.isArray(service)) {
+				continue; //LOOKS LIKE WHEN IT'S AN ARRAY IT'S NOT AN ACTUAL SERVICE?
+			}
+
+			this.addService(service, deviceID);
+		}
 	},
 	getServices: function () {
-		var services = [];
-
-		this.informationService = new Service.AccessoryInformation();
-		this.informationService
-			.setCharacteristic(Characteristic.Manufacturer, this.manufacturer)
-			.setCharacteristic(Characteristic.Model, this.model)
-			.setCharacteristic(Characteristic.SerialNumber, this.serial);
-
-		services.push(this.informationService);
-
-		this.motionService = new Service.MotionSensor(this.name);
-		this.motionService
-			.getCharacteristic(Characteristic.MotionDetected)
-			.on("get", this.getState.bind(this));
-
-		services.push(this.motionService);
-		return services;
+		return this.services;
 	},
-	/*
-	 * Scenarios:
-	 * Start and is currently stopped - trigger immediately
-	 * Start and stop is queued - cancel stop if fuse has passed.  This accounts for the lights turning off and triggering the motion.
-	 * Stop after delay - this is so the light can stay on for a while after the motion has finished
-	*/
-	updateState: function (motionDetected) {
-		motionDetected = !!motionDetected;
+	addService: function (service, deviceID) {
+		var serviceID = service.service_id.toLowerCase();
 
-		if (motionDetected == this.motionDetected) {
-			this.log("Update state fired but hasn't changed, so didn't update.");
-			return;
+		switch (serviceID) {
+			case "com.intesishome.power":
+				this.heaterCoolerService
+					.getCharacteristic(Characteristic.Active)
+					.on("get", function (callback) {
+						callback(null, this.services["com.intesishome.power"].value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
+					}.bind(this))
+					.on("set", function (value, callback) {
+						this.platform.setValue(deviceID, "com.intesishome.power", value, function (error, value) {
+							if (!error) {
+								this.services["com.intesishome.power"].value = value;
+							}
+
+							callback(error, value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
+						});
+					}.bind(this));
+				break;
+			case "com.intesishome.user-mode":
+				this.heaterCoolerService
+					.getCharacteristic(Characteristic.TargetHeaterCoolerState)
+					.on("get", function (callback) {
+						callback(null, this.dataMap.userMode.homekit[this.services["com.intesishome.user-mode"].value.toLowerCase()]);
+					}.bind(this))
+					.on("set", function(value, callback) {
+						this.platform.setValue(deviceID, "com.intesishome.user-mode", this.dataMap.userMode.intesis(value), function (error, value) {
+							if (!error) {
+								this.services["com.intesishome.user-mode"].value = value;
+							}
+
+							callback(error, this.dataMap.userMode.intesis(value));
+						});
+					}.bind(this));
+				break;
+			case "com.intesishome.fan-speed":
+				this.heaterCoolerService
+					.addCharacteristic(Characteristic.RotationSpeed)
+					.setProps({
+						"maxValue": 4,
+						"minValue": 0,
+						"minStep": 1
+					})
+					.on("get", function (callback) {
+						callback(null, this.dataMap.fanSpeed.homekit[this.services["com.intesishome.fan-speed"].value]);
+					}.bind(this))
+					.on("set", function (value, callback) {
+						this.platform.setValue(deviceID, "com.intesishome.fan-speed", this.dataMap.fanSpeed.intesis[value], function (error, value) {
+							if (!error) {
+								this.services["com.intesishome.fan-speed"].value = value;
+							}
+
+							callback(error, this.dataMap.fanSpeed.intesis[value]);
+						});
+					}.bind(this));
+				break;
+			case "com.intesishome.setpoint-temp":
+				this.heaterCoolerService
+					.addCharacteristic(Characteristic.CoolingThresholdTemperature)
+					.setProps({
+						"maxValue": 30,
+						"minValue": 10,
+						"minStep": 1
+					})
+					.on("get", function (callback) {
+						callback(null, this.services["com.intesishome.setpoint-temp"].value);
+					}.bind(this))
+					.on("set", function (value, callback) {
+						this.platform.setValue(deviceID, "com.intesishome.setpoint-temp", value, function (error, value) {
+							if (!error) {
+								this.services["com.intesishome.setpoint-temp"].value = value;
+							}
+
+							callback(error, value);
+						});
+					}.bind(this))
+					.updateValue(this.targetTemperature);
+
+				this.heaterCoolerService
+					.addCharacteristic(Characteristic.HeatingThresholdTemperature)
+					.setProps({
+						"maxValue": 40,
+						"minValue": 20,
+						"minStep": 1
+					})
+					.on("get", function (callback) {
+						callback(null, this.services["com.intesishome.setpoint-temp"].value);
+					}.bind(this))
+					.on("set", function (value, callback) {
+						this.platform.setValue(deviceID, "com.intesishome.setpoint-temp", value, function (error, value) {
+							if (!error) {
+								this.services["com.intesishome.setpoint-temp"].value = value;
+							}
+
+							callback(error, value);
+						});
+					}.bind(this))
+					.updateValue(this.targetTemperature);
+				break;
 		}
-
-		if (motionDetected && !this.startFuseActive && this.stopDelayTimeoutID > -1) {
-			this.log("A motion start event fired while stop was queued, cleared stop queue.");
-			clearTimeout(this.stopDelayTimeoutID);
-			return;
-		} else if (motionDetected && this.startFuseActive) {
-			this.log("A motion start event fired but fuse is running, didn't send start motion event.");
-			return;
-		}
-
-		if (!motionDetected) {
-			this.log("A motion end event fired.  Stop event has now been queued.");
-			this.stopDelayTimeoutID = setTimeout(() => {
-				this.setState(false);
-				this.log("A motion end event set.  Event sent.");
-				this.stopDelayTimeoutID = -1;
-			}, this.stopDelayMs);
-			this.startFuseActive = true;
-			this.log("Fuse started.");
-			setTimeout(() => {
-				this.startFuseActive = false;
-				this.log("Fuse cleared.");
-			}, this.startAfterStopFuseMs);
-			return;
-		}
-
-		this.setState(motionDetected);
 	},
-	setState: function (motionDetected) {
-		this.motionDetected = !!motionDetected;
-		this.motionService.getCharacteristic(Characteristic.MotionDetected)
-			.updateValue(this.motionDetected, null, "updateState");
-		this.log(`Motion state updated to ${this.motionDetected}.`);
+	update: function () {
+		var services = this.details.services;
+
+		if (services["com.intesishome.current-temp"]) {
+			this.heaterCoolerService
+				.getCharacteristic(Characteristic.CurrentTemperature)
+				.updateValue(services["com.intesishome.current-temp"].value);
+		}
 	}
 };
