@@ -275,9 +275,11 @@ IntesisDevice.prototype = {
 				this.heaterCoolerService
 					.getCharacteristic(Characteristic.Active)
 					.on("get", function (callback) {
+						this.log("com.intesishome.power GET");
 						callback(null, this.services["com.intesishome.power"].value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
 					}.bind(this))
 					.on("set", function (value, callback) {
+						this.log("com.intesishome.power SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.power", value, function (error, value) {
 							if (!error) {
 								this.services["com.intesishome.power"].value = value;
@@ -291,9 +293,11 @@ IntesisDevice.prototype = {
 				this.heaterCoolerService
 					.getCharacteristic(Characteristic.TargetHeaterCoolerState)
 					.on("get", function (callback) {
+						this.log("com.intesishome.user-mode GET");
 						callback(null, this.dataMap.userMode.homekit[this.services["com.intesishome.user-mode"].value.toLowerCase()]);
 					}.bind(this))
 					.on("set", function(value, callback) {
+						this.log("com.intesishome.user-mode SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.user-mode", this.dataMap.userMode.intesis(value), function (error, value) {
 							if (!error) {
 								this.services["com.intesishome.user-mode"].value = value;
@@ -312,9 +316,11 @@ IntesisDevice.prototype = {
 						"minStep": 1
 					})
 					.on("get", function (callback) {
+						this.log("com.intesishome.fan-speed GET");
 						callback(null, this.dataMap.fanSpeed.homekit[this.services["com.intesishome.fan-speed"].value]);
 					}.bind(this))
 					.on("set", function (value, callback) {
+						this.log("com.intesishome.fan-speed SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.fan-speed", this.dataMap.fanSpeed.intesis[value], function (error, value) {
 							if (!error) {
 								this.services["com.intesishome.fan-speed"].value = value;
@@ -333,9 +339,11 @@ IntesisDevice.prototype = {
 						"minStep": 1
 					})
 					.on("get", function (callback) {
+						this.log("com.intesishome.setpoint-temp GET");
 						callback(null, this.services["com.intesishome.setpoint-temp"].value);
 					}.bind(this))
 					.on("set", function (value, callback) {
+						this.log("com.intesishome.setpoint-temp SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.setpoint-temp", value, function (error, value) {
 							if (!error) {
 								this.services["com.intesishome.setpoint-temp"].value = value;
@@ -354,9 +362,11 @@ IntesisDevice.prototype = {
 						"minStep": 1
 					})
 					.on("get", function (callback) {
+						this.log("com.intesishome.setpoint-temp GET");
 						callback(null, this.services["com.intesishome.setpoint-temp"].value);
 					}.bind(this))
 					.on("set", function (value, callback) {
+						this.log("com.intesishome.setpoint-temp SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.setpoint-temp", value, function (error, value) {
 							if (!error) {
 								this.services["com.intesishome.setpoint-temp"].value = value;
