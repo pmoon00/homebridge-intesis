@@ -57,6 +57,7 @@ Intesis.prototype = {
 		this.clientSecret = config["clientSecret"];
 		this.username = config["username"];
 		this.password = config["password"];
+		this.configCacheSeconds = config["configCacheSeconds"] || 30;
 		this.token;
 		this.accessories = [];
 		this.deviceDictionary = {};
@@ -117,12 +118,37 @@ Intesis.prototype = {
 
 			if (body && body.length > 0 && body[0]) {
 				this.log("Successfully obtained config.");
-				this.rawConfig = body[0];
-				callback(this.rawConfig);
+				this.lastConfigFetch = new Date().getTime();
+				callback(body[0]);
 			} else {
 				this.log("The response from Intesis while obtaining the config was malformed.");
 			}
 		}.bind(this));
+	},
+	refreshConfig: function (callback) {
+		callback = callback || function () {};
+
+		if (this.lastConfigFetch && (new Date().getTime() - this.lastConfigFetch) / 1000 <= this.configCacheSeconds) {
+			callback();
+			return;
+		}
+
+		this.getConfig(this.token, function (rawConfig) {
+			var devices = rawConfig.devices;
+
+			for (var i = 0, l = devices.length; i < l; i++) {
+				var device = devices[i];
+				var name = device.name;
+
+				if (!name || !this.deviceDictionary[name]) {
+					continue;
+				}
+
+				this.deviceDictionary[name].updateData(device);
+			}
+
+			callback();
+		});
 	},
 	instantiateAccessories: function (rawConfig) {
 		if (!rawConfig || !rawConfig.devices || rawConfig.devices.length == 0) {
@@ -273,6 +299,13 @@ IntesisDevice.prototype = {
 	getServices: function () {
 		return this.services;
 	},
+	updateData: function (newDetails) {
+		if (!newDetails) {
+			return;
+		}
+
+		this.details = newDetails;
+	},
 	addService: function (service, deviceID) {
 		var serviceID = service.service_id.toLowerCase();
 
@@ -281,9 +314,11 @@ IntesisDevice.prototype = {
 				this.heaterCoolerService
 					.getCharacteristic(Characteristic.Active)
 					.on("get", function (callback) {
-						this.log("com.intesishome.power GET", this.details.services["com.intesishome.power"]);
-						callback(null, this.details.services["com.intesishome.power"].value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
-					}.bind(this))
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.power GET", this.details.services["com.intesishome.power"]);
+							callback(null, this.details.services["com.intesishome.power"].value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
+						});
+						}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.power SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.power", !!value, function (error, value) {
@@ -299,8 +334,10 @@ IntesisDevice.prototype = {
 				this.heaterCoolerService
 					.getCharacteristic(Characteristic.TargetHeaterCoolerState)
 					.on("get", function (callback) {
-						this.log("com.intesishome.user-mode GET", this.details.services["com.intesishome.user-mode"]);
-						callback(null, this.dataMap.userMode.homekit[this.details.services["com.intesishome.user-mode"].value.toLowerCase()]);
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.user-mode GET", this.details.services["com.intesishome.user-mode"]);
+							callback(null, this.dataMap.userMode.homekit[this.details.services["com.intesishome.user-mode"].value.toLowerCase()]);
+						});
 					}.bind(this))
 					.on("set", function(value, callback) {
 						this.log("com.intesishome.user-mode SET", value);
@@ -322,8 +359,10 @@ IntesisDevice.prototype = {
 						"minStep": 1
 					})
 					.on("get", function (callback) {
-						this.log("com.intesishome.fan-speed GET", this.details.services["com.intesishome.fan-speed"]);
-						callback(null, this.dataMap.fanSpeed.homekit[this.details.services["com.intesishome.fan-speed"].value]);
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.fan-speed GET", this.details.services["com.intesishome.fan-speed"]);
+							callback(null, this.dataMap.fanSpeed.homekit[this.details.services["com.intesishome.fan-speed"].value]);
+						});
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.fan-speed SET", value);
@@ -337,16 +376,36 @@ IntesisDevice.prototype = {
 					}.bind(this));
 				break;
 			case "com.intesishome.setpoint-temp":
+				var maxTemp = 35;
+				var minTemp = 10;
+				var step = 1;
+
+				if (this.details.services["com.intesishome.setpoint-temp"]) {
+					if (this.details.services["com.intesishome.setpoint-temp"].max_value) {
+						maxTemp = this.details.services["com.intesishome.setpoint-temp"].max_value;
+					}
+
+					if (this.details.services["com.intesishome.setpoint-temp"].min_value) {
+						minTemp = this.details.services["com.intesishome.setpoint-temp"].min_value;
+					}
+
+					if (this.details.services["com.intesishome.setpoint-temp"].step) {
+						step = this.details.services["com.intesishome.setpoint-temp"].step;
+					}
+				}
+
 				this.heaterCoolerService
 					.addCharacteristic(Characteristic.CoolingThresholdTemperature)
 					.setProps({
-						"maxValue": 30,
-						"minValue": 10,
-						"minStep": 1
+						"maxValue": maxTemp,
+						"minValue": minTemp,
+						"minStep": step
 					})
 					.on("get", function (callback) {
-						this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
-						callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
+							callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
+						});
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.setpoint-temp SET", value);
@@ -363,13 +422,15 @@ IntesisDevice.prototype = {
 				this.heaterCoolerService
 					.addCharacteristic(Characteristic.HeatingThresholdTemperature)
 					.setProps({
-						"maxValue": 40,
-						"minValue": 10,
-						"minStep": 1
+						"maxValue": maxTemp,
+						"minValue": minTemp,
+						"minStep": step
 					})
 					.on("get", function (callback) {
-						this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
-						callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
+							callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
+						});
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.setpoint-temp SET", value);
@@ -386,17 +447,14 @@ IntesisDevice.prototype = {
 			case "com.intesishome.current-temp":
 				this.heaterCoolerService
 					.getCharacteristic(Characteristic.CurrentTemperature)
+					.on("get", function (callback) {
+						this.platform.refreshConfig(function () {
+							this.log("com.intesishome.current-temp GET", this.details.services["com.intesishome.current-temp"]);
+							callback(null, this.details.services["com.intesishome.current-temp"].value);
+						});
+					})
 					.updateValue(this.details.services["com.intesishome.current-temp"].value);
 				break;
-		}
-	},
-	update: function () {
-		var services = this.details.services;
-
-		if (services["com.intesishome.current-temp"]) {
-			this.heaterCoolerService
-				.getCharacteristic(Characteristic.CurrentTemperature)
-				.updateValue(services["com.intesishome.current-temp"].value);
 		}
 	}
 };
