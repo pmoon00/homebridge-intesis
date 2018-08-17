@@ -317,8 +317,8 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.power GET", this.details.services["com.intesishome.power"]);
 							callback(null, this.details.services["com.intesishome.power"].value ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
-						});
-						}.bind(this))
+						}.bind(this));
+					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.power SET", value);
 						this.platform.setValue(deviceID, "com.intesishome.power", !!value, function (error, value) {
@@ -337,7 +337,7 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.user-mode GET", this.details.services["com.intesishome.user-mode"]);
 							callback(null, this.dataMap.userMode.homekit[this.details.services["com.intesishome.user-mode"].value.toLowerCase()]);
-						});
+						}.bind(this));
 					}.bind(this))
 					.on("set", function(value, callback) {
 						this.log("com.intesishome.user-mode SET", value);
@@ -362,7 +362,7 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.fan-speed GET", this.details.services["com.intesishome.fan-speed"]);
 							callback(null, this.dataMap.fanSpeed.homekit[this.details.services["com.intesishome.fan-speed"].value]);
-						});
+						}.bind(this));
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.fan-speed SET", value);
@@ -405,7 +405,7 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
 							callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
-						});
+						}.bind(this));
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.setpoint-temp SET", value);
@@ -430,7 +430,7 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.setpoint-temp GET", this.details.services["com.intesishome.setpoint-temp"]);
 							callback(null, this.details.services["com.intesishome.setpoint-temp"].value);
-						});
+						}.bind(this));
 					}.bind(this))
 					.on("set", function (value, callback) {
 						this.log("com.intesishome.setpoint-temp SET", value);
@@ -451,7 +451,7 @@ IntesisDevice.prototype = {
 						this.platform.refreshConfig(function () {
 							this.log("com.intesishome.current-temp GET", this.details.services["com.intesishome.current-temp"]);
 							callback(null, this.details.services["com.intesishome.current-temp"].value);
-						});
+						}.bind(this));
 					}.bind(this))
 					.updateValue(this.details.services["com.intesishome.current-temp"].value);
 				break;
