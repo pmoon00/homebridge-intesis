@@ -452,7 +452,7 @@ IntesisDevice.prototype = {
 							this.log("com.intesishome.current-temp GET", this.details.services["com.intesishome.current-temp"]);
 							callback(null, this.details.services["com.intesishome.current-temp"].value);
 						});
-					})
+					}.bind(this))
 					.updateValue(this.details.services["com.intesishome.current-temp"].value);
 				break;
 		}
