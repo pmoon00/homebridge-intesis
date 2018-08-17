@@ -1,0 +1,13 @@
+//PLATFORMS MAY ALREADY EXIST IN YOUR CONFIG
+"platforms": [
+	{
+		"platform": "intesis",
+		"apiBaseURL": "https://user.intesishome.com/", //DEFAULTS TO THIS IF YOU DON'T SUPPLY IT
+		"grantType": "password", //DEFAULTS TO THIS
+		"clientID": "YOUR_CLIENT_ID",
+		"clientSecret": "YOUR_CLIENT_SECRET",
+		"username": "username",
+		"password": "password",
+		"configCacheSeconds": 30 //NUMBER OF SECONDS THE CONFIG WILL BE CACHED FOR
+	}
+]
