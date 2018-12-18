@@ -74,11 +74,11 @@ Intesis.prototype = {
 			if (typeof this.pollSeconds === "number") {
 				var that = this;
 
-				this.log(`Polling has been activated and will poll every ${this.pollSeconds * 1000} seconds.`);
-				this.pollingIntervalID = setInterval(function () {
+				this.log(`Polling has been activated and will poll every ${this.pollSeconds} seconds.`);
+				this.pollingIntervalID = setInterval((function () {
 					this.log("Polling for new config data.");
 					this.refreshConfig.apply(that, null);
-				}, this.pollSeconds * 1000);
+				}).bind(this), this.pollSeconds * 1000);
 			}
 		};
 		this.getToken({
@@ -151,7 +151,7 @@ Intesis.prototype = {
 		}
 
 		this.getConfig(this.token, function (rawConfig) {
-			this.log("Succesfully refreshed config data.");
+			this.log("Successfully refreshed config data.");
 			var devices = rawConfig.devices;
 
 			for (var i = 0, l = devices.length; i < l; i++) {
