@@ -50,6 +50,8 @@ Intesis.prototype = {
 	accessories: function (callback) {
 		var config = this.config;
 
+		this.apiAuthURLSuffix = config["apiAuthURLSuffix"] || "oauth2/token";
+		this.apiAuthURLSuffix = this.apiAuthURLSuffix[0] == "/" ? this.apiAuthURLSuffix.substring(1) : this.apiAuthURLSuffix;
 		this.apiBaseURL = config["apiBaseURL"] || "https://user.intesishome.com/";
 		this.apiBaseURL = this.apiBaseURL.lastIndexOf("/") == this.apiBaseURL.length - 1 ? this.apiBaseURL : this.apiBaseURL + "/";
 		this.grantType = config["grantType"] || "password";
