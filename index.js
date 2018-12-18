@@ -60,6 +60,7 @@ Intesis.prototype = {
 		this.username = config["username"];
 		this.password = config["password"];
 		this.configCacheSeconds = config["configCacheSeconds"] || 30;
+		this.pollSeconds = config["pollSeconds"];
 		this.token;
 		this.accessories = [];
 		this.deviceDictionary = {};
@@ -67,6 +68,18 @@ Intesis.prototype = {
 			this.log("Setting up accessories/devices...");
 			this.log(accessories);
 			callback(accessories);
+			this.setupPolling();
+		};
+		this.setupPolling = function () {
+			if (typeof this.pollSeconds === "number") {
+				var that = this;
+
+				this.log(`Polling has been activated and will poll every ${this.pollSeconds * 1000} seconds.`);
+				this.pollingIntervalID = setInterval(function () {
+					this.log("Polling for new config data.");
+					this.refreshConfig.apply(that, null);
+				}, this.pollSeconds * 1000);
+			}
 		};
 		this.getToken({
 			"grant_type": this.grantType,
@@ -80,7 +93,7 @@ Intesis.prototype = {
 		this.log("Obtaining token...");
 		callback = (callback || function () {}).bind(this);
 		request.post({
-			"url": this.apiBaseURL + "api.php/oauth2/token",
+			"url": this.apiBaseURL + this.apiAuthURLSuffix,
 			"form": payload
 		}, callback);
 	},
@@ -128,14 +141,17 @@ Intesis.prototype = {
 		}.bind(this));
 	},
 	refreshConfig: function (callback) {
+		this.log("Attempting to refresh config.");
 		callback = callback || function () {};
 
 		if (this.lastConfigFetch && (new Date().getTime() - this.lastConfigFetch) / 1000 <= this.configCacheSeconds) {
+			this.log("Config data isn't older than the configured cache time, not refreshing.");
 			callback();
 			return;
 		}
 
 		this.getConfig(this.token, function (rawConfig) {
+			this.log("Succesfully refreshed config data.");
 			var devices = rawConfig.devices;
 
 			for (var i = 0, l = devices.length; i < l; i++) {
