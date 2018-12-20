@@ -60,26 +60,31 @@ Intesis.prototype = {
 		this.username = config["username"];
 		this.password = config["password"];
 		this.configCacheSeconds = config["configCacheSeconds"] || 30;
-		this.pollSeconds = config["pollSeconds"];
 		this.token;
+		this.refreshToken;
 		this.accessories = [];
 		this.deviceDictionary = {};
+		this.tokenRefreshTimeoutID = -1;
+		this.refreshConfigCallbackQueue = [];
+		this.callbackRefreshConfigQueue = (function () {
+			var item = this.refreshConfigCallbackQueue.pop();
+
+			this.log("Calling all the callbacks in queue for post refresh config.");
+
+			while (item) {
+				if (typeof item === "function") {
+					item();
+				}
+
+				item = this.refreshConfigCallbackQueue.pop();
+			}
+
+			this.log("Done calling all the callbacks in queue for post refresh config.");
+		}).bind(this);
 		this.setupAccessories = function (accessories) {
 			this.log("Setting up accessories/devices...");
 			this.log(accessories);
 			callback(accessories);
-			this.setupPolling();
-		};
-		this.setupPolling = function () {
-			if (typeof this.pollSeconds === "number") {
-				var that = this;
-
-				this.log(`Polling has been activated and will poll every ${this.pollSeconds} seconds.`);
-				this.pollingIntervalID = setInterval((function () {
-					this.log("Polling for new config data.");
-					this.refreshConfig.apply(that, null);
-				}).bind(this), this.pollSeconds * 1000);
-			}
 		};
 		this.getToken({
 			"grant_type": this.grantType,
@@ -88,6 +93,35 @@ Intesis.prototype = {
 			"username": this.username,
 			"password": this.password
 		}, this.startWithTokenResult);
+	},
+	getRefreshToken: function () {
+		this.log("Refreshing token...");
+		request.post({
+			"url": this.apiBaseURL + this.apiAuthURLSuffix,
+			"form": {
+				"grant_type": "refresh_token",
+				"client_id": this.clientID,
+				"client_secret": this.clientSecret,
+				"refresh_token": this.refreshToken
+			}
+		}, this.getRefreshToken_callback);
+	},
+	getRefreshToken_callback: function (err, httpResponse, body) {
+		if (err || httpResponse.statusCode != 200) {
+			this.log("An error occurred obtaining token with refresh token.");
+			this.log(err);
+			return;
+		}
+
+		body = this.parseJSON(body);
+
+		if (body && body.access_token) {
+			this.log("Successfully obtained token.");
+			this.token = body.access_token;
+			this.tokenRefreshTimeoutID = setTimeout(this.getRefreshToken, (body.expires_in - 10) * 1000);
+		} else {
+			this.log("The response from Intesis while obtaining the token (with refresh token) was malformed.");
+		}
 	},
 	getToken: function (payload, callback) {
 		this.log("Obtaining token...");
@@ -109,6 +143,14 @@ Intesis.prototype = {
 		if (body && body.access_token) {
 			this.log("Successfully obtained token.");
 			this.token = body.access_token;
+
+			if (body.refresh_token && body.expires_in) {
+				this.refreshToken = body.refresh_token;
+				this.tokenRefreshTimeoutID = setTimeout(this.getRefreshToken, (body.expires_in - 10) * 1000);
+			} else {
+				this.log("No refresh token was given, failure imminent in approximately 60 minutes.");
+			}
+			
 			this.getConfig(this.token, this.instantiateAccessories);
 		} else {
 			this.log("The response from Intesis while obtaining the token was malformed.  homebridge-intesis plugin failed to load.");
@@ -145,11 +187,19 @@ Intesis.prototype = {
 		callback = callback || function () {};
 
 		if (this.lastConfigFetch && (new Date().getTime() - this.lastConfigFetch) / 1000 <= this.configCacheSeconds) {
-			this.log("Config data isn't older than the configured cache time, not refreshing.");
+			this.log(`Config data isn't older than the configured cache time (${this.configCacheSeconds}s), not refreshing.`);
 			callback();
 			return;
 		}
 
+		this.refreshConfigCallbackQueue.push(callback);
+
+		if (this.refreshConfigInProgress) {
+			this.log("Refresh config in progress, adding callback to queue.");
+			return;
+		}
+
+		this.refreshConfigInProgress = true;
 		this.getConfig(this.token, function (rawConfig) {
 			this.log("Successfully refreshed config data.");
 			var devices = rawConfig.devices;
@@ -165,7 +215,8 @@ Intesis.prototype = {
 				this.deviceDictionary[name].updateData(device);
 			}
 
-			callback();
+			this.refreshConfigInProgress = false;
+			this.callbackRefreshConfigQueue();
 		});
 	},
 	instantiateAccessories: function (rawConfig) {

@@ -9,7 +9,6 @@
 		"clientSecret": "YOUR_CLIENT_SECRET",
 		"username": "username",
 		"password": "password",
-		"configCacheSeconds": 30, //NUMBER OF SECONDS THE CONFIG WILL BE CACHED FOR
-		"pollSeconds": null //NULL WILL CAUSE IT TO NOT POLL.  SET IT TO A NUMBER VALUE TO ACTIVATE POLLING.
+		"configCacheSeconds": 30 //NUMBER OF SECONDS THE CONFIG WILL BE CACHED FOR
 	}
 ]
