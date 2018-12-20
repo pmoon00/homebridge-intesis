@@ -104,7 +104,7 @@ Intesis.prototype = {
 				"client_secret": this.clientSecret,
 				"refresh_token": this.refreshToken
 			}
-		}, this.getRefreshToken_callback);
+		}, (function (a, b, c) { this.getRefreshToken_callback(a, b, c); }).bind(this));
 	},
 	getRefreshToken_callback: function (err, httpResponse, body) {
 		if (err || httpResponse.statusCode != 200) {
@@ -118,7 +118,7 @@ Intesis.prototype = {
 		if (body && body.access_token) {
 			this.log("Successfully obtained token.");
 			this.token = body.access_token;
-			this.tokenRefreshTimeoutID = setTimeout(this.getRefreshToken, (body.expires_in - 10) * 1000);
+			this.tokenRefreshTimeoutID = setTimeout((function () { this.getRefreshToken(); }).bind(this), (body.expires_in - 30) * 1000);
 		} else {
 			this.log("The response from Intesis while obtaining the token (with refresh token) was malformed.");
 		}
@@ -146,7 +146,7 @@ Intesis.prototype = {
 
 			if (body.refresh_token && body.expires_in) {
 				this.refreshToken = body.refresh_token;
-				this.tokenRefreshTimeoutID = setTimeout(this.getRefreshToken, (body.expires_in - 10) * 1000);
+				this.tokenRefreshTimeoutID = setTimeout((function () { this.getRefreshToken(); }).bind(this), (body.expires_in - 30) * 1000);
 			} else {
 				this.log("No refresh token was given, failure imminent in approximately 60 minutes.");
 			}
